@@ -1,0 +1,12 @@
+python3 run_glue.py \
+    --model_name_or_path bert-base-uncased \
+    --task_name "sst2" \
+    --output_dir models/bert_sst2/ \
+    --per_gpu_train_batch_size 64 \
+    --per_gpu_eval_batch_size 64 \
+    --learning_rate ... \
+    --do_train \
+    --do_eval \
+    --overwrite_output_dir \
+    --seed 100 \
+    --max_seq_length 128
