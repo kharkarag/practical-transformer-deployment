@@ -2,11 +2,28 @@ from flask import Flask, request, abort
 app = Flask(__name__)
 
 from torch.nn.functional import softmax
-import onnxruntime as ort
 
 # Global variables
 tokenizer, ort_session = None, None
 supported_models = ['bert', 'bert-small', 'bert-tiny', 'distilbert']
+
+# Imports for onnx
+from os import environ
+from psutil import cpu_count
+
+environ["OMP_NUM_THREADS"] = '1'
+environ["OMP_WAIT_POLICY"] = 'ACTIVE'
+
+from onnxruntime import InferenceSession, SessionOptions
+
+
+def create_model_for_provider(model_path: str, provider: str) -> InferenceSession:
+    # Few properties than might have an impact on performances (provided by MS)
+    options = SessionOptions()
+    options.intra_op_num_threads = 1
+
+    # Load the model as a graph and prepare the CPU backend
+    return InferenceSession(model_path, options, providers=[provider])
 
 
 @app.route("/set_model", methods=['POST', 'GET'])
@@ -30,7 +47,7 @@ def set_model():
         onnx_path = f"models/{model_type}_optim.onnx"
     else:
         onnx_path = f"models/{model_type}.onnx"
-    ort_session = ort.InferenceSession(onnx_path)
+    ort_session = create_model_for_provider(onnx_path, 'CPUExecutionProvider')
         
 
 @app.route("/inference", methods=['POST', 'GET'])

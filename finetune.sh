@@ -1,4 +1,4 @@
-#!/bin.bash
+#!/bin/sh
 
 # Models:  
 # BERT (bert-base-uncased)
@@ -9,7 +9,7 @@
 # Tasks:
 # sst2
 #
-# Example usage: bash finetune.sh bert-base-uncased sst2
+# Example usage: ./finetune.sh bert-base-uncased sst2 `lr`
 # Example output dir: models/bert-base-uncased_sst2
 
 python3 run_glue.py \
@@ -18,7 +18,7 @@ python3 run_glue.py \
     --output_dir models/$1_$2/ \
     --per_gpu_train_batch_size 64 \
     --per_gpu_eval_batch_size 64 \
-    --learning_rate ... \
+    --learning_rate $3 \
     --do_train \
     --do_eval \
     --overwrite_output_dir \
