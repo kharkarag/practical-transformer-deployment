@@ -1,7 +1,7 @@
 from flask import Flask, request, abort
 app = Flask(__name__)
-
-from torch.nn.functional import softmax
+import time
+from transformers import DistilBertTokenizer, BertTokenizer
 
 # Global variables
 tokenizer, ort_session = None, None
@@ -48,6 +48,8 @@ def set_model():
     else:
         onnx_path = f"models/{model_type}.onnx"
     ort_session = create_model_for_provider(onnx_path, 'CPUExecutionProvider')
+    
+    return f"Model set to {model_type}"
         
 
 @app.route("/inference", methods=['POST', 'GET'])
@@ -61,8 +63,14 @@ def inference():
     if input_strings is None or len(input_strings) < 1:
         return "Requests to `inference` must include `input_string`", 400
     
+    start_time = time.time()    
+    
     inputs = tokenizer(input_strings, return_tensors="np")
     outputs = ort_session.run(["last_hidden_state"], dict(inputs))
-    predictions = softmax(outputs[0])
+    predictions = outputs[0].tolist()
+    
+    end_time = time.time()
+    total_time = end_time - start_time
+    input_size = len(inputs)
 
-    return {"predictions": predictions}
+    return {"predictions": predictions, "time": total_time, "input_size": input_size}
