@@ -4,18 +4,19 @@ import time
 from transformers import DistilBertTokenizer, BertTokenizer
 
 # Global variables
-tokenizer, ort_session = None, None
+tokenizer, ort_session, model_path = None, None, None
 supported_models = ['bert', 'bert-small', 'bert-tiny', 'distilbert']
 
 # Imports for onnx
 from os import environ
 from psutil import cpu_count
 
-environ["OMP_NUM_THREADS"] = '1'
-environ["OMP_WAIT_POLICY"] = 'ACTIVE'
+# environ["OMP_NUM_THREADS"] = '1'
+# environ["OMP_WAIT_POLICY"] = 'ACTIVE'
 
+import onnxruntime as ort
 from onnxruntime import InferenceSession, SessionOptions
-
+print(ort.get_device())
 
 def create_model_for_provider(model_path: str, provider: str) -> InferenceSession:
     # Few properties than might have an impact on performances (provided by MS)
@@ -28,13 +29,13 @@ def create_model_for_provider(model_path: str, provider: str) -> InferenceSessio
 
 @app.route("/set_model", methods=['POST', 'GET'])
 def set_model():
-    global tokenizer, ort_session
+    global tokenizer, ort_session, model_path
 
     if request.method == 'GET':
         return "GET not supported", 404
 
     model_type = request.args.get("model_type")
-    use_onnx_optim = request.args.get("use_onnx_optim", False)
+    use_onnx_optim = request.args.get("use_onnx_optim", "False") == "True"
     if model_type is None:
         return "Requests to `set_model` must include `model_type`", 400
 
@@ -44,11 +45,14 @@ def set_model():
         tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     if use_onnx_optim:
-        onnx_path = f"models/{model_type}_optim.onnx"
+        onnx_path = f"models/{model_type}-opt.onnx"
     else:
         onnx_path = f"models/{model_type}.onnx"
+        
+    model_path = onnx_path
     ort_session = create_model_for_provider(onnx_path, 'CPUExecutionProvider')
     
+    print(f"Model set to {model_type} at {onnx_path}")
     return f"Model set to {model_type}"
         
 
@@ -73,4 +77,4 @@ def inference():
     total_time = end_time - start_time
     input_size = len(inputs)
 
-    return {"predictions": predictions, "time": total_time, "input_size": input_size}
+    return {"predictions": predictions, "time": total_time, "input_size": input_size, "model_path": model_path}

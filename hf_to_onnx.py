@@ -3,7 +3,7 @@ from transformers import TensorType, BertPreTrainedModel, DistilBertPreTrainedMo
 from collections import OrderedDict
 from typing import Mapping
 from itertools import chain
-
+import argparse
 
 class BertOnnxConfig(OnnxConfig):
     @property
@@ -55,3 +55,15 @@ def to_onnx(model, tokenizer, out_path):
                      enable_onnx_checker=True,
                      opset_version=12,
     )
+    
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('input_path')
+    parser.add_argument('output_path')
+    args = parser.parse_args()
+
+    tokenizer = DistilBertTokenizer.from_pretrained(args.input_path)
+    model = DistilBertForSequenceClassification.from_pretrained(args.input_path)
+
+    to_onnx(model, tokenizer, args.out_path)
