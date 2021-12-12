@@ -17,12 +17,11 @@ import onnxruntime as ort
 from onnxruntime import InferenceSession, SessionOptions
 print(f"Running on {ort.get_device()}")
 
-def create_model_for_provider(model_path: str, provider: str, num_threads: int = 1) -> InferenceSession:
+def create_model_for_provider(model_path: str, num_threads: int = 1) -> InferenceSession:
     """
     Creates an ONNX inference session for the specified model and hardware type.
     Args:
         model_path (str): filepath to the model on disk
-        provider (str): ONNX hardware provider (either CPUExecutionProvider or CUDAExceptionProvider)
         num_threads (int): number of intra-op threads for session
     Returns:
         (InferenceSession): ONNX Runtime inference session
@@ -30,6 +29,7 @@ def create_model_for_provider(model_path: str, provider: str, num_threads: int =
     # Few properties than might have an impact on performances (provided by MS)
     options = SessionOptions()
     options.intra_op_num_threads = num_threads
+    provider = 'CPUExecutionProvider' if ort.get_device() == 'CPU' else 'CUDAExecutionProvider'
 
     # Load the model as a graph and prepare the CPU backend
     return InferenceSession(model_path, options, providers=[provider])
@@ -53,7 +53,7 @@ def set_model() -> str:
 
     # Parse request args
     model_type = request.args.get("model_type")
-    use_onnx_optim = request.args.get("use_onnx_optim", "False") == "True"
+    use_onnx_quant = request.args.get("use_onnx_quant", "False") == "True"
     num_threads = int(request.args.get("num_threads", 1))
     if model_type is None:
         return "Requests to `set_model` must include `model_type`", 400
@@ -67,12 +67,12 @@ def set_model() -> str:
         tokenizer = ElectraTokenizer.from_pretrained('google/electra-small-discriminator')
 
     # Set model path
-    if use_onnx_optim:
-        model_path = f"models/{model_type}-opt.onnx"
+    if use_onnx_quant:
+        model_path = f"models/{model_type}.quant.onnx"
     else:
         model_path = f"models/{model_type}.onnx"
 
-    ort_session = create_model_for_provider(model_path, 'CPUExecutionProvider', num_threads)
+    ort_session = create_model_for_provider(model_path, num_threads)
 
     print(f"Model set to {model_type} at {model_path}")
     return f"Model set to {model_type}"
