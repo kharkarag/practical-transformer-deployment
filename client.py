@@ -12,7 +12,8 @@ def inference_request(url: str, batch_size: int = 1, seq_multiplier: int = 1):
         url (str): URL of the endpoint to send the request
         batch_size (int): number of dummy sentences in the batch
     Returns:
-        (request.Response): reponse from the endpoint
+        (request.Response): response from the endpoint
+        (float): time of request
     """
     headers = {
         "Content-Type": "application/json",
@@ -28,7 +29,6 @@ def inference_request(url: str, batch_size: int = 1, seq_multiplier: int = 1):
     end_time = time.time()
 
     return response, end_time - start_time
-
 
 
 def get_url(local: bool, remote_type: str = None) -> str:
