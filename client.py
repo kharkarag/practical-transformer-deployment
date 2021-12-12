@@ -5,7 +5,7 @@ import argparse
 import numpy as np
 
 
-def inference_request(url: str, batch_size: int) -> requests.Response:
+def inference_request(url: str, batch_size: int = 1, seq_multiplier: int = 1):
     """
     Sends an inference request with a batch of dummy sentences.
     Args:
@@ -19,9 +19,15 @@ def inference_request(url: str, batch_size: int) -> requests.Response:
         "Accept": "application/json"
     }
     data = [
-        "This is a test string for the various transformer models to evaluate."
+        "String which will be used to evaluate model speed." * seq_multiplier
     ] * batch_size
-    return requests.post(url, json=data, headers=headers)
+
+    # Time request
+    start_time = time.time()
+    response = requests.post(url, json=data, headers=headers)
+    end_time = time.time()
+
+    return response, end_time - start_time
 
 
 
@@ -69,7 +75,8 @@ def set_model(model_type: str, local: bool = False, remote_type: str = None, onn
         raise RuntimeError(f"Failed to set {endpoint} to {model_type}, ONNX opt: {onnx_opt}")
 
 
-def run_trials(batch_size: int = 32, local: bool = False, remote_type: str = None, num_trials: int = 5) -> list:
+def run_trials(batch_size: int = 32, seq_multi: int =1 , local: bool = False,
+               remote_type: str = None, num_trials: int = 500) -> list:
     """
     Runs several trials of model inferences and collects timing data for each trial.
     Args:
@@ -80,22 +87,20 @@ def run_trials(batch_size: int = 32, local: bool = False, remote_type: str = Non
         (list): timing data metrics for each trial
     """
     url = get_url(local, remote_type)
-    print(f"Using batch size: {batch_size}")
+    print(f"Using batch size: {batch_size}, seq_len: {seq_multi * 2 + 1}")
 
     times = []
     for _ in range(num_trials):
-        start_time = time.time()
-        response = inference_request(f"{url}/inference", batch_size)
-        end_time = time.time()
+        response, run_time = inference_request(f"{url}/inference", batch_size, seq_multi)
         output = json.loads(response.content)
 
-        times.append({'local_time': output['time'], 'total_time': end_time - start_time})
+        times.append({'local_time': output['time'], 'total_time': run_time})
 
-    print(f"Average time: {sum(times)/num_trials:.3f} s")
+    # print(f"Average time: {sum(times)/num_trials:.3f} s")
     return times
 
 
-def run_all_endpoints(batch_size: int) -> dict:
+def run_all_endpoints(batch_size: int, seq_multi: int) -> dict:
     """
     Sends an inference request to all of the endpoints.
     Args:
@@ -103,9 +108,9 @@ def run_all_endpoints(batch_size: int) -> dict:
     Returns:
         (dict): timing metrics for each endpoint
     """
-    local_cpu_times = run_trials(batch_size=batch_size, local=True)
-    remote_cpu_times = run_trials(batch_size=batch_size, local=False, remote_type='cpu')
-    remote_gpu_times = run_trials(batch_size=batch_size, local=False, remote_type='gpu')
+    local_cpu_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=True)
+    remote_cpu_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=False, remote_type='cpu')
+    remote_gpu_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=False, remote_type='gpu')
 
     results = dict()
     results['local_cpu'] = local_cpu_times
@@ -134,18 +139,25 @@ def run_full_project():
     model_types = ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
     onnx_opts = [False, True]
     batch_sizes = [2**i for i in range(7)]
+    seq_lens = [x for x in range(25)]
     master_results = dict()
 
     for model_type in model_types:
         onnx_opt_results = dict()
+
         for onnx_opt in onnx_opts:
             set_all_models(model_type, onnx_opt)
             batch_size_results = dict()
+
             for batch_size in batch_sizes:
-                print(f"Running {model_type}, optim {onnx_opt}, batch_size {batch_size}")
-                times = run_all_endpoints(model_type, batch_size, onnx_opt)
-                time_metrics = {k:(np.mean(v), np.std(v)) for k, v in times.items()}
-                batch_size_results[batch_size] = time_metrics
+                s_decay = 10 if batch_size >= 64 else len(seq_lens)
+
+                for seq_m in seq_lens[:-s_decay]:
+                    print(f"Running {model_type}, optim {onnx_opt}, batch_size {batch_size}, seq_len {seq_m * 10 + 2}")
+                    times = run_all_endpoints(batch_size, seq_m)
+                    time_metrics = {k:(np.mean(v), np.std(v)) for k, v in times.items()}
+                    batch_size_results[(batch_size, seq_m)] = time_metrics
+
             onnx_opt_results[onnx_opt] = batch_size_results
         master_results[model_type] = onnx_opt_results
 

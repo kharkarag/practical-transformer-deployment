@@ -1,7 +1,7 @@
 from flask import Flask, request, abort
 app = Flask(__name__)
 import time
-from transformers import DistilBertTokenizer, BertTokenizer, ElectraTokenizer
+from transformers import DistilBertTokenizerFast, BertTokenizerFast, ElectraTokenizerFast
 
 # Global variables
 tokenizer, ort_session, model_path = None, None, None
@@ -60,11 +60,11 @@ def set_model() -> str:
 
     # Set tokenizer
     if 'distil' in model_type:
-        tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+        tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     elif 'bert' in model_type:
-        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
     elif 'electra' in model_type:
-        tokenizer = ElectraTokenizer.from_pretrained('google/electra-small-discriminator')
+        tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
 
     # Set model path
     if use_onnx_optim:
