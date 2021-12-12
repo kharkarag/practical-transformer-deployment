@@ -1,10 +1,19 @@
-import requests
 import json
 import time
+import requests
 import argparse
+import numpy as np
 
 
-def inference_request(url, batch_size):
+def inference_request(url: str, batch_size: int) -> requests.Response:
+    """
+    Sends an inference request with a batch of dummy sentences.
+    Args:
+        url (str): URL of the endpoint to send the request
+        batch_size (int): number of dummy sentences in the batch
+    Returns:
+        (request.Response): reponse from the endpoint
+    """
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json"
@@ -16,7 +25,15 @@ def inference_request(url, batch_size):
 
 
 
-def get_url(local, remote_type=None):
+def get_url(local: bool, remote_type: str = None) -> str:
+    """
+    Maps the locality and type of endpoint to a URL for an endpoint.
+    Args:
+        local (bool): whether to access the local endpoint or a remote one
+        remote_type (str): type of remote endpoint (either 'cpu' or 'gpu') - only used if local == False
+    Returns:
+        (str): URL of endpoint
+    """
     if local:
         url = "http://127.0.0.1:5001"
         print(f"Accessing local")
@@ -28,48 +45,68 @@ def get_url(local, remote_type=None):
             url = "http://35.204.119.9:5001"
             print(f"Accessing remote GPU")
         else:
-            raise ArgumentError("remote_type must be either `cpu` or `gpu` for remote inference")
-        
+            raise ValueError("remote_type must be either `cpu` or `gpu` for remote inference")
+
     return url
 
-def set_model(model_type, local=False, remote_type=None, onnx_opt=False):
+
+def set_model(model_type: str, local: bool = False, remote_type: str = None, onnx_opt: bool = False) -> None:
+    """
+    Sends a request to set the model type of the specifies endpoint and verifies the response.
+    Args:
+        model_type (str): model to load on the endpoint. Must be in ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
+        local (bool): whether to access the local endpoint or a remote one
+        remote_type (str): type of remote endpoint (either 'cpu' or 'gpu') - only used if local == False
+        onnx_opt (bool): whether to use ONNX-optimized model
+    """
     url = get_url(local, remote_type)
+    endpoint = 'local' if local else remote_type
+
     response = requests.post(f"{url}/set_model", params={"model_type": model_type, "use_onnx_optim": onnx_opt})
-    
     if response.ok:
-        endpoint = 'local' if local else remote_type
         print(f"Successfully set {endpoint} to {model_type}, ONNX opt: {onnx_opt}")
     else:
         raise RuntimeError(f"Failed to set {endpoint} to {model_type}, ONNX opt: {onnx_opt}")
-    
-def run_trials(model_type, batch_size=32, local=False, remote_type=None, onnx_opt=False):
-    num_trials = 5
-    
+
+
+def run_trials(batch_size: int = 32, local: bool = False, remote_type: str = None, num_trials: int = 5) -> list:
+    """
+    Runs several trials of model inferences and collects timing data for each trial.
+    Args:
+        batch_size (int): number of dummy sentences in the batch
+        local (bool): whether to access the local endpoint or a remote one
+        remote_type (str): type of remote endpoint (either 'cpu' or 'gpu') - only used if local == False
+    Returns:
+        (list): timing data metrics for each trial
+    """
     url = get_url(local, remote_type)
     print(f"Using batch size: {batch_size}")
-        
+
     times = []
-    for i in range(num_trials):    
+    for _ in range(num_trials):
         start_time = time.time()
         response = inference_request(f"{url}/inference", batch_size)
         end_time = time.time()
         output = json.loads(response.content)
-        
-        if local:
-            t = output['time']
-        else:
-            t = end_time - start_time
-        times.append(t)
-        
+
+        times.append({'local_time': output['time'], 'total_time': end_time - start_time})
+
     print(f"Average time: {sum(times)/num_trials:.3f} s")
     return times
 
 
-def run_all_endpoints(model_type, batch_size, onnx_opt):
-    local_cpu_times = run_trials(model_type, batch_size=batch_size, local=True, onnx_opt=onnx_opt)
-    remote_cpu_times = run_trials(model_type, batch_size=batch_size, local=False, remote_type='cpu', onnx_opt=onnx_opt)
-    remote_gpu_times = run_trials(model_type, batch_size=batch_size, local=False, remote_type='gpu', onnx_opt=onnx_opt)
-    
+def run_all_endpoints(batch_size: int) -> dict:
+    """
+    Sends an inference request to all of the endpoints.
+    Args:
+        batch_size (int): number of dummy sentences in the batch
+    Returns:
+        (dict): timing metrics for each endpoint
+    """
+    local_cpu_times = run_trials(batch_size=batch_size, local=True)
+    remote_cpu_times = run_trials(batch_size=batch_size, local=False, remote_type='cpu')
+    remote_gpu_times = run_trials(batch_size=batch_size, local=False, remote_type='gpu')
+
     results = dict()
     results['local_cpu'] = local_cpu_times
     results['remote_cpu'] = remote_cpu_times
@@ -77,19 +114,28 @@ def run_all_endpoints(model_type, batch_size, onnx_opt):
     return results
 
 
-def set_all_models(model_type, onnx_opt):
+def set_all_models(model_type: str, onnx_opt: bool) -> None:
+    """
+    Sets the model for all endpoints.
+    Args:
+        model_type (str): model to load on the endpoint. Must be in ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
+        onnx_opt (bool): whether to use ONNX-optimized model
+    """
     set_model(model_type, local=True, onnx_opt=onnx_opt)
     set_model(model_type, local=False, remote_type='cpu', onnx_opt=onnx_opt)
     set_model(model_type, local=False, remote_type='gpu', onnx_opt=onnx_opt)
-    
 
-model_types = ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
-onnx_opts = [False, True]
-batch_sizes = [2**i for i in range(7)]
-    
+
 def run_full_project():
+    """
+    Runs the entire project.
+    Performs inference for all model types (with and without ONNX optim) for all batch sizes across all endpoints.
+    """
+    model_types = ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
+    onnx_opts = [False, True]
+    batch_sizes = [2**i for i in range(7)]
     master_results = dict()
-    
+
     for model_type in model_types:
         onnx_opt_results = dict()
         for onnx_opt in onnx_opts:
@@ -98,14 +144,15 @@ def run_full_project():
             for batch_size in batch_sizes:
                 print(f"Running {model_type}, optim {onnx_opt}, batch_size {batch_size}")
                 times = run_all_endpoints(model_type, batch_size, onnx_opt)
-                batch_size_results[batch_size] = times
+                time_metrics = {k:(np.mean(v), np.std(v)) for k, v in times.items()}
+                batch_size_results[batch_size] = time_metrics
             onnx_opt_results[onnx_opt] = batch_size_results
         master_results[model_type] = onnx_opt_results
-        
+
     with open('master_results.json', 'w+') as f:
         json.dump(master_results, f)
-    
-    
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_type')
@@ -115,9 +162,9 @@ if __name__ == "__main__":
     parser.add_argument('--onnx_opt', action='store_true', default=False)
     parser.add_argument('--run_full', action='store_true', default=False)
     args = parser.parse_args()
-    
+
     if args.run_full:
         run_full_project()
     else:
         response = set_model(args.model_type, local=args.local, remote_type=args.remote_type, onnx_opt=args.onnx_opt)
-        times = run_trials(args.model_type, batch_size=args.batch_size, local=args.local, remote_type=args.remote_type, onnx_opt=args.onnx_opt)
+        times = run_trials(batch_size=args.batch_size, local=args.local, remote_type=args.remote_type)

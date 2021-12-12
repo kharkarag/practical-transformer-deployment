@@ -1,78 +1,111 @@
 from flask import Flask, request, abort
 app = Flask(__name__)
 import time
-from transformers import DistilBertTokenizer, BertTokenizer
+from transformers import DistilBertTokenizer, BertTokenizer, ElectraTokenizer
 
 # Global variables
 tokenizer, ort_session, model_path = None, None, None
 supported_models = ['bert', 'bert-small', 'bert-tiny', 'distilbert']
 
-# Imports for onnx
+# Imports and env vars for onnx
 from os import environ
 from psutil import cpu_count
-
 # environ["OMP_NUM_THREADS"] = '1'
 # environ["OMP_WAIT_POLICY"] = 'ACTIVE'
 
 import onnxruntime as ort
 from onnxruntime import InferenceSession, SessionOptions
-print(ort.get_device())
+print(f"Running on {ort.get_device()}")
 
-def create_model_for_provider(model_path: str, provider: str) -> InferenceSession:
+def create_model_for_provider(model_path: str, provider: str, num_threads: int = 1) -> InferenceSession:
+    """
+    Creates an ONNX inference session for the specified model and hardware type.
+    Args:
+        model_path (str): filepath to the model on disk
+        provider (str): ONNX hardware provider (either CPUExecutionProvider or CUDAExceptionProvider)
+        num_threads (int): number of intra-op threads for session
+    Returns:
+        (InferenceSession): ONNX Runtime inference session
+    """
     # Few properties than might have an impact on performances (provided by MS)
     options = SessionOptions()
-    options.intra_op_num_threads = 1
+    options.intra_op_num_threads = num_threads
 
     # Load the model as a graph and prepare the CPU backend
     return InferenceSession(model_path, options, providers=[provider])
 
 
 @app.route("/set_model", methods=['POST', 'GET'])
-def set_model():
+def set_model() -> str:
+    """
+    Loads the specified model type for future inference requests.
+    Request args:
+        model_type (str): model to load. Must be in ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
+        use_onnx_optim (bool): whether to use ONNX-optimized model
+        num_threads (int): number of intra-op threads for session 
+    Returns:
+        (str): success message
+    """
     global tokenizer, ort_session, model_path
 
     if request.method == 'GET':
         return "GET not supported", 404
 
+    # Parse request args
     model_type = request.args.get("model_type")
     use_onnx_optim = request.args.get("use_onnx_optim", "False") == "True"
+    num_threads = int(request.args.get("num_threads", 1))
     if model_type is None:
         return "Requests to `set_model` must include `model_type`", 400
 
+    # Set tokenizer
     if 'distil' in model_type:
         tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
     elif 'bert' in model_type:
         tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    elif 'electra' in model_type:
+        tokenizer = ElectraTokenizer.from_pretrained('google/electra-small-discriminator')
 
+    # Set model path
     if use_onnx_optim:
-        onnx_path = f"models/{model_type}-opt.onnx"
+        model_path = f"models/{model_type}-opt.onnx"
     else:
-        onnx_path = f"models/{model_type}.onnx"
-        
-    model_path = onnx_path
-    ort_session = create_model_for_provider(onnx_path, 'CPUExecutionProvider')
-    
-    print(f"Model set to {model_type} at {onnx_path}")
+        model_path = f"models/{model_type}.onnx"
+
+    ort_session = create_model_for_provider(model_path, 'CPUExecutionProvider', num_threads)
+
+    print(f"Model set to {model_type} at {model_path}")
     return f"Model set to {model_type}"
-        
+
 
 @app.route("/inference", methods=['POST', 'GET'])
-def inference():
+def inference() -> dict:
+    """
+    Performs inference on the previously loaded model with the provided batch of sentences.
+    Request args:
+        [json] (str): JSON parameter of request must contain list of sentences
+    Returns:
+        (dict): inference metrics
+    """
+    global tokenizer, ort_session
+
     if request.method == 'GET':
         return "GET not supported", 404
     if tokenizer is None or ort_session is None:
         return f"Tokenizer and model are not set. Please call the `set_model` URL with argument `model_type` in {supported_models}", 500
 
+    # Parse request args
     input_strings = request.get_json()
     if input_strings is None or len(input_strings) < 1:
         return "Requests to `inference` must include `input_string`", 400
-    
-    start_time = time.time()    
-    
+
+    # Perform inference
+    start_time = time.time()
+
     inputs = tokenizer(input_strings, return_tensors="np")
     outputs = ort_session.run(["last_hidden_state"], dict(inputs))
     predictions = outputs[0].tolist()
-    
+
     end_time = time.time()
     total_time = end_time - start_time
     input_size = len(inputs)
