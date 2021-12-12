@@ -144,7 +144,7 @@ def run_full_project(num_trials: int = 5):
     for model_type in model_types:
         onnx_opt_results = dict()
 
-        for onnx_quant in onnx_opts:
+        for onnx_quant in onnx_quants:
             set_all_models(model_type, onnx_quant)
             batch_size_results = dict()
 
@@ -152,12 +152,12 @@ def run_full_project(num_trials: int = 5):
                 s_decay = 10 if batch_size >= 64 else len(seq_lens)
 
                 for seq_m in seq_lens[:-s_decay]:
-                    print(f"Running {model_type}, optim {onnx_opt}, batch_size {batch_size}, seq_len {seq_m * 10 + 2}")
+                    print(f"Running {model_type}, optim {onnx_quant}, batch_size {batch_size}, seq_len {seq_m * 10 + 2}")
                     times = run_all_endpoints(batch_size, seq_m)
                     time_metrics = {k:(np.mean(v), np.std(v)) for k, v in times.items()}
                     batch_size_results[(batch_size, seq_m)] = time_metrics
 
-            onnx_opt_results[onnx_opt] = batch_size_results
+            onnx_opt_results[onnx_quant] = batch_size_results
         master_results[model_type] = onnx_opt_results
 
     with open('master_results.json', 'w+') as f:
