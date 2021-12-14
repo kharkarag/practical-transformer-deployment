@@ -10,8 +10,6 @@ supported_models = ['bert', 'bert-small', 'bert-tiny', 'distilbert']
 # Imports and env vars for onnx
 from os import environ
 from psutil import cpu_count
-# environ["OMP_NUM_THREADS"] = '1'
-# environ["OMP_WAIT_POLICY"] = 'ACTIVE'
 
 import onnxruntime as ort
 from onnxruntime import InferenceSession, SessionOptions
@@ -29,10 +27,10 @@ def create_model_for_provider(model_path: str, num_threads: int = 1) -> Inferenc
     # Few properties than might have an impact on performances (provided by MS)
     options = SessionOptions()
     options.intra_op_num_threads = num_threads
-    provider = 'CPUExecutionProvider' if ort.get_device() == 'CPU' else 'CUDAExecutionProvider'
+    providers = ['CPUExecutionProvider'] if ort.get_device() == 'CPU' else ['CUDAExecutionProvider']
 
     # Load the model as a graph and prepare the CPU backend
-    return InferenceSession(model_path, options, providers=[provider])
+    return InferenceSession(model_path, options, providers=providers)
 
 
 @app.route("/set_model", methods=['POST', 'GET'])
@@ -68,9 +66,11 @@ def set_model() -> str:
 
     # Set model path
     if use_onnx_quant:
-        model_path = f"models/{model_type}.quant.onnx"
+        # model_path = f"models/{model_type}.quant.onnx"
+        model_path = f"{model_type}-quant/{model_type}.onnx"
     else:
-        model_path = f"models/{model_type}.onnx"
+        # model_path = f"models/{model_type}.onnx"
+        model_path = f"{model_type}/{model_type}.onnx"
 
     ort_session = create_model_for_provider(model_path, num_threads)
 
@@ -103,7 +103,8 @@ def inference() -> dict:
     start_time = time.time()
 
     inputs = tokenizer(input_strings, return_tensors="np")
-    outputs = ort_session.run(["last_hidden_state"], dict(inputs))
+    # outputs = ort_session.run(["last_hidden_state"], dict(inputs))
+    outputs = ort_session.run(["output_0"], dict(inputs))
     predictions = outputs[0].tolist()
 
     end_time = time.time()
