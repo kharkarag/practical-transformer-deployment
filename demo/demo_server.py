@@ -1,18 +1,17 @@
 import numpy as np
 from flask import Flask, request, abort, render_template
-import time
+import json
 import requests
 from scipy.special import softmax
-from transformers import DistilBertTokenizerFast, BertTokenizerFast, ElectraTokenizerFast
 
 from collections import defaultdict
-from datasets import load_dataset, load_metric
+from datasets import load_dataset
 
 # Globals
 SENTENCES = 250
 sentence_table_log, trial, data, model_path, model_metrics = None, None, None, None, None
 supported_models = ['bert', 'bert-small', 'bert-tiny', 'distilbert']
-model_types = ['bert-base', 'distilbert', 'electra-small', 'bert-tiny']
+model_types = ['bert-base', 'distilbert', 'electra-small', 'bert-tiny', 'bert-base-gpu']
 first_start = True
 
 models = {}
@@ -22,10 +21,6 @@ app = Flask(__name__)
 
 import time
 from transformers import DistilBertTokenizerFast, BertTokenizerFast, ElectraTokenizerFast
-
-# Imports and env vars for onnx
-from os import environ
-from psutil import cpu_count
 
 import onnxruntime as ort
 from onnxruntime import InferenceSession, SessionOptions
@@ -68,11 +63,7 @@ def create_model_for_provider(model_path: str, num_threads: int = 1) -> Inferenc
     return InferenceSession(model_path, options, providers=providers)
 
 
-
-
-
-## FIXME: NEED TO UPDATE THIS FOR NEW DATA
-def inference_request(url: str, batch_size: int = 1, seq_multiplier: int = 1):
+def inference_request(url: str, data, batch_size: int = 1, seq_multiplier: int = 1):
     """
     Sends an inference request with a batch of dummy sentences.
     Args:
@@ -86,15 +77,13 @@ def inference_request(url: str, batch_size: int = 1, seq_multiplier: int = 1):
         "Content-Type": "application/json",
         "Accept": "application/json"
     }
-    data = None
+
     # Time request
     start_time = time.time()
-    response = requests.post(url, json=data, headers=headers)
+    response = requests.post(url, json=[data], headers=headers)
     end_time = time.time()
 
     return response, end_time - start_time
-
-
 
 
 def get_url(local: bool, remote_type: str = None) -> str:
@@ -165,11 +154,11 @@ def set_model(model_type: str, local: bool = False, remote_type: str = None, onn
 
 
 def set_all_models():
-    for model in model_types:
+    for model in model_types[:-1]:
         set_model(model, local=True, num_threads=2)
 
     # set GPU model
-    # set_model(model_types[0], local=False, remote_type='gpu', onnx_quant=False)
+    set_model(model_types[0], local=False, remote_type='v100', onnx_quant=False)
     return
 
 
@@ -221,7 +210,7 @@ def update_aggregates(results, label):
 
     # update sentence table log
     entry = [trial, seq_len, label]
-    entry.extend([results[m]['label'] for m in model_types])
+    entry.extend([results[m]['label'] for m in model_types[:-1]])
 
     # insert at top
     sentence_table_log.insert(0, entry)
@@ -238,8 +227,17 @@ def process_sent():
 
     # pass through models
     results = {}
-    for model in model_types:
+    for model in model_types[:-1]:
         results[model] = predict_model(model, sent, label)
+
+    # DO GPU stuff
+    response, _ = inference_request(f"{get_url(False,'v100')}/inference", sent)
+    out = json.loads(response.content)
+    logits = softmax(out['predictions'])
+    p_label = np.argmax(logits)
+    prediction = int(p_label == label)
+    results['bert-base-gpu'] = {"confidence": round(logits[0, p_label], 3), "label": p_label,
+            "score": prediction, "time": out['time'], "input_size": out['input_size']}
 
     # update running tables
     update_aggregates(results, label)
