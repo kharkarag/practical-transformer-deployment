@@ -1,3 +1,6 @@
 # Files to not include
 .DS_Store
 .idea/
+__pycache__
+master_results_updated.json
+demo/models/

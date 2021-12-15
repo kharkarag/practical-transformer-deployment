@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Test Latencies and Accuraries of Different Models</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style type="text/css">
+      .container {
+        max-width: 500px;
+        padding-top: 10px;
+      }
+
+      .s_container {
+        height: 500px;
+        width: 800px;
+        overflow-y: auto;
+      }
+
+      .sentence1 {
+        max-width: 500 px;
+        background-color: rgba(0,0,0,.2);
+        padding-bottom: 3px;
+        padding-top: 3px;
+      }
+
+      .sentence2 {
+        background-color: rgba(0,0,0,.05);
+        padding-bottom: 3px;
+        padding-top: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Test Latencies and Accuraries of Different Models</h1>
+    <div class="container">
+      <p>Available Models:</p>
+      <ul>
+        {% for n in my_list %}
+        <li>{{n}}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <h3>Choose a sentence</h3>
+    <div class="s_container">
+      <!--FIXME: Make this scrollable-->
+      {% for n in sentences %}
+        {% if loop.index0 % 2 == 0 %}
+          <div class="sentence1">{{n}}</div>
+        {% else %}
+          <div class="sentence2">{{n}}</div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+
+    <script src="http://code.jquery.com/jquery-1.10.2.min.js"></script>
+    <script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/js/bootstrap.min.js"></script>
+  </body>
+</html>
