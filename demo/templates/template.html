@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style type="text/css">
       .container {
-        max-width: 500px;
-        padding-top: 10px;
+        display: flex;
+      }
+      .container > div {
+        flex: 1; /*grow*/
       }
 
       .s_container {
@@ -31,25 +33,99 @@
   </head>
   <body>
     <h1>Test Latencies and Accuraries of Different Models</h1>
-    <div class="container">
-      <p>Available Models:</p>
-      <ul>
-        {% for n in my_list %}
-        <li>{{n}}</li>
-        {% endfor %}
-      </ul>
+
+    <div class="container" style="width: 100%; height: 270px;">
+        <div style="width: 50%;">
+          <h3>Available Models</h3>
+            <ul>
+              {% for n in models %}
+              <li>{{n}}</li>
+              {% endfor %}
+            </ul>
+        </div>
+        <div style="width: 80%;">
+          <h3>Last Experiment</h3>
+
+          <p>{{last_data['sent']}}</p>
+          <p>Label: {{last_data['label']}}, Sequence Length: {{last_data['seq_len']}}</p>
+
+          <table style="width:90%" id="log_table" border="1">
+            <th> Model </th>
+            <th> Label </th>
+            <th> Confidence </th>
+            <th> Speed Up (Bert) </th>
+
+            {% for match in last_table %}
+            <tr>
+              <td align="center" style="width:5%"> {{match[0]}} </td>
+              <td align="center" style="width:5%"> {{match[1]}} </td>
+              <td align="center" style="width:5%"> {{match[2]}} </td>
+              <td align="center" style="width:5%"> {{match[3]}} </td>
+              {% endfor %}
+          </table>
+        </div>
+        <div style="">
+          <h3>Global Stats</h3>
+          <table style="width:90%" id="log_table" border="1">
+            <th> Model </th>
+            <th> Acc </th>
+            <th> Speed Up (Bert) </th>
+
+            {% for match in global_table %}
+            <tr>
+              <td align="center" style="width:5%"> {{match[0]}} </td>
+              <td align="center" style="width:5%"> {{match[1]}} </td>
+              <td align="center" style="width:5%"> {{match[2]}} </td>
+              {% endfor %}
+          </table>
+        </div>
     </div>
 
-    <h3>Choose a sentence</h3>
-    <div class="s_container">
-      <!--FIXME: Make this scrollable-->
-      {% for n in sentences %}
-        {% if loop.index0 % 2 == 0 %}
-          <div class="sentence1">{{n}}</div>
-        {% else %}
-          <div class="sentence2">{{n}}</div>
-        {% endif %}
-      {% endfor %}
+    <br/><br/>
+
+    <div style="width: 100%;">
+        <div style="width: 50%; height: 500px; float: left;">
+          <h3>SST-2 Sentences</h3>
+          <div style="width: 100%; height: 100%; overflow-y:auto;">
+          {% for n in sentences %}
+            {% if loop.index0 % 2 == 0 %}
+              <form action="/process_sent/" method="post">
+                <button class="sentence1" type="submit" value="{{n}}" name="sent">{{n['sent']}}</button>
+              </form>
+
+            {% else %}
+              <form action="/process_sent/" method="post">
+                <button class="sentence2" type="submit" name="sent" value="{{n}}">{{n['sent']}}</button>
+              </form>
+            {% endif %}
+          {% endfor %}
+          </div>
+        </div>
+        <div style="margin-left: 55%; height: 500px;">
+          <h3>Predictions/Speed Up Log</h3>
+          <div style="width: 100%; height: 100%; overflow-y:auto;">
+          <table style="width:90%" id="log_table" border="1">
+            <th> Trial </th>
+            <th> seq_len </th>
+            <th> Truth </th>
+            <th> Bert </th>
+            <th> D-Bert </th>
+            <th> Electra </th>
+            <th> BertTiny </th>
+
+            {% for match in log_table %}
+              <tr>
+              <td align="center" style="width:10%"> {{match[0]}} </td>
+              <td align="center" style="width:10%"> {{match[1]}} </td>
+              <td align="center" style="width:10%"> {{match[2]}} </td>
+              <td align="center" style="width:10%"> {{match[3]}} </td>
+              <td align="center" style="width:10%"> {{match[4]}} </td>
+              <td align="center" style="width:10%"> {{match[5]}} </td>
+              <td align="center" style="width:10%"> {{match[6]}} </td>
+            {% endfor %}
+          </table>
+          </div>
+        </div>
     </div>
 
 

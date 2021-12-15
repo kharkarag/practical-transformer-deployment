@@ -13,6 +13,7 @@ SENTENCES = 250
 sentence_table_log, trial, data, model_path, model_metrics = None, None, None, None, None
 supported_models = ['bert', 'bert-small', 'bert-tiny', 'distilbert']
 model_types = ['bert-base', 'distilbert', 'electra-small', 'bert-tiny']
+first_start = True
 
 models = {}
 tokenizers = {}
@@ -38,8 +39,6 @@ def initialize_tables():
 
     # sentence table log
     sentence_table_log = []
-    header = ['trial', 'seq_len', 'truth', 'bert', 'dbert', 'electra', 'berttiny']
-    sentence_table_log.append(header)
 
     # model metrics table
     model_metrics = defaultdict(dict)
@@ -156,7 +155,7 @@ def set_model(model_type: str, local: bool = False, remote_type: str = None, onn
         set_local_model(model_type, num_threads)
     else:
         url = get_url(local, remote_type)
-        endpoint = 'local' if local else remote_type
+        endpoint = remote_type
 
         response = requests.post(f"{url}/set_model", params={"model_type": model_type, "use_onnx_quant": onnx_quant, "num_threads": num_threads})
         if response.ok:
@@ -167,10 +166,10 @@ def set_model(model_type: str, local: bool = False, remote_type: str = None, onn
 
 def set_all_models():
     for model in model_types:
-        set_model(model, local=True)
+        set_model(model, local=True, num_threads=2)
 
     # set GPU model
-    #set_model(model_types[0], local=False, remote_type='gpu', onnx_quant=False)
+    # set_model(model_types[0], local=False, remote_type='gpu', onnx_quant=False)
     return
 
 
@@ -178,11 +177,11 @@ def gather_sentences():
     global data
 
     # fetch the dataset
-    train_set = load_dataset("glue", "sst2")['test']
+    train_set = load_dataset("glue", "sst2")['validation']
     sents = train_set[np.random.randint(0, train_set.num_rows, SENTENCES)]
 
     # map into proper format
-    data = [(s,l) for s,l in zip(sents['sentence'], sents['label'])]
+    data = [{'sent': s,'label': l} for s,l in zip(sents['sentence'], sents['label'])]
 
 
 def predict_model(model_type, input_string, label):
@@ -203,7 +202,8 @@ def predict_model(model_type, input_string, label):
 
     input_size = inputs['input_ids'].shape[1]
 
-    return {"confidence": logits[0, p_label], "score": prediction, "time": total_time, "input_size": input_size}
+    return {"confidence": round(logits[0, p_label], 3), "label": p_label,
+            "score": prediction, "time": total_time, "input_size": input_size}
 
 
 def update_aggregates(results, label):
@@ -221,20 +221,20 @@ def update_aggregates(results, label):
 
     # update sentence table log
     entry = [trial, seq_len, label]
-    entry.extend([results[m]['score'] for m in model_types])
+    entry.extend([results[m]['label'] for m in model_types])
 
-    # insert at 1 from top
-    sentence_table_log.insert(1, entry)
+    # insert at top
+    sentence_table_log.insert(0, entry)
 
 
-@app.route('/process_sent/', methods=['GET', 'POST'])
+@app.route('/process_sent/', methods=['POST'])
 def process_sent():
     global trial
 
     # process request
     trial += 1
-    sent = request.args.get("sentence")
-    label = request.args.get("label")
+    form = eval(request.form.get('sent'))
+    sent, label = form['sent'], form['label']
 
     # pass through models
     results = {}
@@ -244,18 +244,33 @@ def process_sent():
     # update running tables
     update_aggregates(results, label)
 
-    # return results organized + tables and what not
+    # prep global stats table
+    global_table = [[mt, round(np.mean(val['acc']),3), round(np.mean(val['speedup']),2)] for mt, val in model_metrics.items()]
 
-    return results
+    # prep last experiment display
+    last_exp = [[mt, val['label'], val['confidence'], round(model_metrics[mt]['speedup'][-1],2)] for mt,val in results.items()]
+    last_data = {'sent':sent, 'label': label, 'seq_len': results['bert-base']['input_size']}
+
+    return render_template('template.html', models=model_types, sentences=data,
+                           log_table=sentence_table_log, global_table=global_table,
+                           last_table=last_exp, last_data=last_data)
 
 
 @app.route('/')
 def main():
-    gather_sentences()
-    set_all_models()
-    initialize_tables()
+    global first_start
 
-    return render_template('template.html', my_list=model_types, sentences=[x[0] for x in data])
+    if first_start:
+        gather_sentences()
+        set_all_models()
+        initialize_tables()
+
+        first_start = False
+
+    return render_template('template.html', models=model_types, sentences=data,
+                           log_table=sentence_table_log, last_data=None)
 
 
+if __name__ == '__main__':
+    app.run()
 
