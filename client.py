@@ -41,14 +41,11 @@ def get_url(local: bool, remote_type: str = None) -> str:
     """
     if local:
         url = "http://127.0.0.1:5001"
-        # print(f"Accessing local")
     else:
         if remote_type == 'cpu':
             url = "http://35.204.76.196:5001"
-            # print(f"Accessing remote CPU")
         elif remote_type == 'v100':
             url = "http://35.204.119.9:5001"
-            # print(f"Accessing remote GPU")
         elif remote_type == 't4':
             url = "http://35.204.91.169:5001"
         else:
@@ -97,7 +94,6 @@ def run_trials(batch_size: int = 32, seq_multi: int = 1 , local: bool = False,
 
         times['local_time'].append(output['time'])
         times['total_time'].append(run_time)
-        # times.append({'local_time': output['time'], 'total_time': run_time})
 
     time_metrics = {k: {'mean': np.mean(v), 'std': np.std(v)} for k, v in times.items()}
 
@@ -115,14 +111,14 @@ def run_all_endpoints(batch_size: int, seq_multi: int, num_trials: int = 100) ->
     """
     local_cpu_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=True, num_trials=num_trials)
     remote_cpu_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=False, remote_type='cpu', num_trials=num_trials)
-    # remote_v100_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=False, remote_type='v100', num_trials=num_trials)
-    # remote_t4_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=False, remote_type='t4', num_trials=num_trials)
+    remote_v100_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=False, remote_type='v100', num_trials=num_trials)
+    remote_t4_times = run_trials(batch_size=batch_size, seq_multi=seq_multi, local=False, remote_type='t4', num_trials=num_trials)
 
     results = dict()
     results['local_cpu'] = local_cpu_times
     results['remote_cpu'] = remote_cpu_times
-    # results['remote_v100'] = remote_v100_times
-    # results['remote_t4'] = remote_t4_times
+    results['remote_v100'] = remote_v100_times
+    results['remote_t4'] = remote_t4_times
     return results
 
 
@@ -135,8 +131,8 @@ def set_all_models(model_type: str, onnx_quant: bool) -> None:
     """
     set_model(model_type, local=True, onnx_quant=onnx_quant)
     set_model(model_type, local=False, remote_type='cpu', onnx_quant=onnx_quant, num_threads=8)
-    # set_model(model_type, local=False, remote_type='v100', onnx_quant=onnx_quant)
-    # set_model(model_type, local=False, remote_type='t4', onnx_quant=onnx_quant)
+    set_model(model_type, local=False, remote_type='v100', onnx_quant=onnx_quant)
+    set_model(model_type, local=False, remote_type='t4', onnx_quant=onnx_quant)
 
 
 def run_full_project(num_trials: int = 5):
@@ -145,7 +141,6 @@ def run_full_project(num_trials: int = 5):
     Performs inference for all model types (with and without ONNX optim) for all batch sizes across all endpoints.
     """
     model_types = ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
-    # onnx_quants = [False, True]
     onnx_quants = [False, True]
     batch_sizes = [2**i for i in range(1, 7, 2)]
     seq_lens = [x for x in range(1, 13, 2)]
@@ -159,12 +154,10 @@ def run_full_project(num_trials: int = 5):
             batch_size_results = dict()
 
             for batch_size in batch_sizes:
-                # s_decay = 10 if batch_size >= 64 else len(seq_lens)
 
                 for seq_m in seq_lens:
                     print(f"Running {model_type}, optim {onnx_quant}, batch_size {batch_size}, seq_len {seq_m * 10 + 2}")
                     time_metrics = run_all_endpoints(batch_size, seq_m, num_trials)
-                    # time_metrics = {k:(np.mean(v), np.std(v)) for k, v in times.items()}
                     batch_size_results[f"bs{batch_size}_sl{seq_m}"] = time_metrics
 
             onnx_opt_results[onnx_quant] = batch_size_results

@@ -5,7 +5,7 @@
 git clone https://github.com/kharkarag/practical-transformer-deployment.git
 cd practical-transformer-deployment
 
-conda env create -f environment.yml -y
+conda env create -f environment.yml
 source ~/.bashrc
 conda activate project
 

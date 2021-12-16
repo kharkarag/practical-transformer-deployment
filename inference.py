@@ -66,10 +66,8 @@ def set_model() -> str:
 
     # Set model path
     if use_onnx_quant:
-        # model_path = f"models/{model_type}.quant.onnx"
         model_path = f"{model_type}-quant/{model_type}.onnx"
     else:
-        # model_path = f"models/{model_type}.onnx"
         model_path = f"{model_type}/{model_type}.onnx"
 
     ort_session = create_model_for_provider(model_path, num_threads)
@@ -103,7 +101,6 @@ def inference() -> dict:
     start_time = time.time()
 
     inputs = tokenizer(input_strings, return_tensors="np")
-    # outputs = ort_session.run(["last_hidden_state"], dict(inputs))
     outputs = ort_session.run(["output_0"], dict(inputs))
     predictions = outputs[0].tolist()
 

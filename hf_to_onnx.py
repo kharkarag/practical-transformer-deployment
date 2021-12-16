@@ -1,3 +1,4 @@
+import torch
 from transformers.onnx import OnnxConfig
 from transformers import TensorType, BertPreTrainedModel, DistilBertPreTrainedModel
 from collections import OrderedDict
