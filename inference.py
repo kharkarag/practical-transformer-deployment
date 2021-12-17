@@ -15,7 +15,7 @@ import onnxruntime as ort
 from onnxruntime import InferenceSession, SessionOptions
 print(f"Running on {ort.get_device()}")
 
-def create_model_for_provider(model_path: str, num_threads: int = 1) -> InferenceSession:
+def create_model_for_provider(model_path: str, num_threads: int = 1, use_onnx_quant: bool = False) -> InferenceSession:
     """
     Creates an ONNX inference session for the specified model and hardware type.
     Args:
@@ -27,6 +27,9 @@ def create_model_for_provider(model_path: str, num_threads: int = 1) -> Inferenc
     # Few properties than might have an impact on performances (provided by MS)
     options = SessionOptions()
     options.intra_op_num_threads = num_threads
+    if use_onnx_quant:
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    
     providers = ['CPUExecutionProvider'] if ort.get_device() == 'CPU' else ['CUDAExecutionProvider']
 
     # Load the model as a graph and prepare the CPU backend
@@ -66,11 +69,11 @@ def set_model() -> str:
 
     # Set model path
     if use_onnx_quant:
-        model_path = f"{model_type}-quant/{model_type}.onnx"
+        model_path = f"{model_type}-quant/{model_type}-quantized.onnx"
     else:
         model_path = f"{model_type}/{model_type}.onnx"
 
-    ort_session = create_model_for_provider(model_path, num_threads)
+    ort_session = create_model_for_provider(model_path, num_threads, use_onnx_quant)
 
     print(f"Model set to {model_type} at {model_path}")
     return f"Model set to {model_type}"

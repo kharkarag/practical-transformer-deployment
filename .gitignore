@@ -5,3 +5,7 @@ __pycache__
 master_results_updated.json
 demo/models/
 .ipynb_checkpoints
+*results*.json
+*bert*/
+*electra*/
+*models/
