@@ -10,7 +10,8 @@ def inference_request(url: str, batch_size: int = 1, seq_multiplier: int = 1):
     Sends an inference request with a batch of dummy sentences.
     Args:
         url (str): URL of the endpoint to send the request
-        batch_size (int): number of dummy sentences in the batch
+        batch_size (int): number of sentences in the batch
+        seq_multiplier (int): scaling factor for length of each input sequence
     Returns:
         (request.Response): response from the endpoint
         (float): time of request
@@ -62,6 +63,7 @@ def set_model(model_type: str, local: bool = False, remote_type: str = None, onn
         local (bool): whether to access the local endpoint or a remote one
         remote_type (str): type of remote endpoint (either 'cpu' or 'gpu') - only used if local == False
         onnx_quant (bool): whether to use ONNX-quantized model
+        num_threads (int): number of CPU threads for the ONNX inference session on the server
     """
     url = get_url(local, remote_type)
     endpoint = 'local' if local else remote_type
@@ -78,9 +80,11 @@ def run_trials(batch_size: int = 32, seq_multi: int = 1 , local: bool = False,
     """
     Runs several trials of model inferences and collects timing data for each trial.
     Args:
-        batch_size (int): number of dummy sentences in the batch
+        batch_size (int): number of sentences in the batch
+        seq_multi (int): scaling factor for length of each input sequence
         local (bool): whether to access the local endpoint or a remote one
         remote_type (str): type of remote endpoint (either 'cpu' or 'gpu') - only used if local == False
+        num_trials (int): number of repeated trials to perform. Each trial is a separate request
     Returns:
         (list): timing data metrics for each trial
     """
@@ -105,7 +109,9 @@ def run_all_endpoints(batch_size: int, seq_multi: int, num_trials: int = 100) ->
     """
     Sends an inference request to all of the endpoints.
     Args:
-        batch_size (int): number of dummy sentences in the batch
+        batch_size (int): number of sentences in the batch
+        seq_multi (int): scaling factor for length of each input sequence
+        num_trials (int): number of repeated trials to perform. Each trial is a separate request
     Returns:
         (dict): timing metrics for each endpoint
     """
@@ -139,6 +145,8 @@ def run_full_project(num_trials: int = 5):
     """
     Runs the entire project.
     Performs inference for all model types (with and without ONNX optim) for all batch sizes across all endpoints.
+    Args:
+        num_trials (int): number of repeated trials to perform. Each trial is a separate request
     """
     model_types = ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
     onnx_quants = [False, True]

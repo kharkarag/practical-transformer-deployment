@@ -21,6 +21,7 @@ def create_model_for_provider(model_path: str, num_threads: int = 1, use_onnx_qu
     Args:
         model_path (str): filepath to the model on disk
         num_threads (int): number of intra-op threads for session
+        use_onnx_quant (bool): whether to use ONNX quantization (and optimization)
     Returns:
         (InferenceSession): ONNX Runtime inference session
     """
@@ -42,7 +43,7 @@ def set_model() -> str:
     Loads the specified model type for future inference requests.
     Request args:
         model_type (str): model to load. Must be in ['bert-base', 'bert-tiny', 'distilbert', 'electra-small']
-        use_onnx_optim (bool): whether to use ONNX-optimized model
+        use_onnx_quant (bool): whether to use ONNX-quantized model
         num_threads (int): number of intra-op threads for session 
     Returns:
         (str): success message
