@@ -27,6 +27,10 @@ from onnxruntime import InferenceSession, SessionOptions
 
 
 def initialize_tables():
+    """
+    Initializes all of the storage units used in our demo tool. Only runs during
+    the first instatiation of the tool.
+    """
     global model_metrics, sentence_table_log, trial
 
     # reset other globals
@@ -42,7 +46,6 @@ def initialize_tables():
             'acc' : [],
             'speedup' : [],
         }
-
 
 
 def create_model_for_provider(model_path: str, num_threads: int = 1) -> InferenceSession:
@@ -63,12 +66,12 @@ def create_model_for_provider(model_path: str, num_threads: int = 1) -> Inferenc
     return InferenceSession(model_path, options, providers=providers)
 
 
-def inference_request(url: str, data, batch_size: int = 1, seq_multiplier: int = 1):
+def inference_request(url: str, data):
     """
     Sends an inference request with a batch of dummy sentences.
     Args:
         url (str): URL of the endpoint to send the request
-        batch_size (int): number of dummy sentences in the batch
+        data (str): Sentence to process
     Returns:
         (request.Response): response from the endpoint
         (float): time of request
@@ -114,6 +117,12 @@ def get_url(local: bool, remote_type: str = None) -> str:
 
 
 def set_local_model(model_type: str, num_threads: int = 1):
+    """
+    Sets all of our models running on the local machine
+    Args:
+        model_type (str): model type to initialize
+        num_threads (int): Number of threads to run on
+    """
     global tokenizers, models
 
     # Set tokenizer
@@ -127,7 +136,6 @@ def set_local_model(model_type: str, num_threads: int = 1):
         raise ValueError(f"Bad model type: {model_type}")
 
     # Get model path
-    ## FIXME: change back to {model_type}-quant/{model_type}.onnx"
     model_path = f"models/{model_type}-opt.onnx"
 
     # Load model
@@ -138,6 +146,15 @@ def set_local_model(model_type: str, num_threads: int = 1):
 
 
 def set_model(model_type: str, local: bool = False, remote_type: str = None, onnx_quant: bool = False, num_threads: int = 1) -> None:
+    """
+    Initializes a model on local device, and cpu or gpu.
+    Args:
+        model_type (str): model type to initialize
+        local (bool): to run on local machines
+        remote_type (str): type of machine running remotely to deploy on
+        onnx_quant (bool): indicator of if onnx qunatization is performed
+        num_threads (int): Number of threads to run on
+    """
     global models
 
     if local:
@@ -154,15 +171,22 @@ def set_model(model_type: str, local: bool = False, remote_type: str = None, onn
 
 
 def set_all_models():
+    """
+    Sets all models required for the demo.
+    """
+    # Set all local models
     for model in model_types[:-1]:
         set_model(model, local=True, num_threads=2)
 
-    # set GPU model
+    # Set GPU model
     set_model(model_types[0], local=False, remote_type='v100', onnx_quant=False)
     return
 
 
 def gather_sentences():
+    """
+    Loads the test dataset used for inferencing in the demo.
+    """
     global data
 
     # fetch the dataset
@@ -174,11 +198,17 @@ def gather_sentences():
 
 
 def predict_model(model_type, input_string, label):
+    """
+    Predict a single local model on the clicked user string.
+    Args:
+        model_type (str): type of model we are predicting on
+        input_string (str): user clicked string
+        label (int): label (0/1) of the clicked string
+    """
     # Perform inference
     start_time = time.time()
 
     inputs = tokenizers[model_type](input_string, return_tensors="np")
-    # outputs = ort_session.run(["last_hidden_state"], dict(inputs))
     outputs = models[model_type].run([], dict(inputs))
 
     end_time = time.time()
@@ -196,6 +226,12 @@ def predict_model(model_type, input_string, label):
 
 
 def update_aggregates(results, label):
+    """
+    Update all of our global storage tables shown on the demo application.
+    Args:
+        results (Dict[Dict[str])): Dictionary of model results on the input string
+        label (int): Label of the input string.
+    """
     global model_metrics, sentence_table_log
 
     # get comparison points for speed up
@@ -212,12 +248,16 @@ def update_aggregates(results, label):
     entry = [trial, seq_len, label]
     entry.extend([results[m]['label'] for m in model_types[:-1]])
 
-    # insert at top
+    # insert at top - so ordering is preserved at fastest inference
     sentence_table_log.insert(0, entry)
 
 
 @app.route('/process_sent/', methods=['POST'])
 def process_sent():
+    """
+    Process a sentence from the dataset clicked on by a user in the
+    demo.
+    """
     global trial
 
     # process request
@@ -256,8 +296,12 @@ def process_sent():
 
 @app.route('/')
 def main():
+    """
+    Initializes demo.
+    """
     global first_start
 
+    # If we are booting up first time, set globals
     if first_start:
         gather_sentences()
         set_all_models()
@@ -265,6 +309,7 @@ def main():
 
         first_start = False
 
+    # set page
     return render_template('template.html', models=model_types, sentences=data,
                            log_table=sentence_table_log, last_data=None)
 

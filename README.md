@@ -27,8 +27,16 @@ Usage: `export FLASK_APP=inference && flask run --host=0.0.0.0 --port=5001`
 
 
 ## Demo
-TODO
 
+The creation of our tool is created with a model deployment focus in mind. When deploying a model to production, it is important to perform inferencing on real examples that your model will see. All the experiments in the subsequent sections are performed in idealized aggregated formats, which is important but not enough.
+
+Our tool is designed for investigating the latencies and accuracies of different models. We host 5 models: BERTBase (CPU), BERTBase (GPU), ELECTRASmall (CPU), BERTTiny (CPU), DistilBERT (CPU). All models are trained on the SST-2 (sentiment) GLUE dataset. Below is a layout of the demo tool.
+
+![demo](img/demo.png)
+
+We provide a list of sentences from the test set of the SST-2 dataset. When a sentence is clicked, it passes through all 5 models, recording the prediction, confidence score, and inference speed (measured as a speed up over BERT-base). We record a log of all run trials including the true prediction and predictions by each model. We also log global stats across all run trials, such as accuracy and inference speed.
+
+This demo is helpful because it allows for investigation into individual sentences, as mentioned above. This allows us to probe our models, highlight deficiencies, and gather true production setting metrics on inference speeds.
 
 ## Experiments and Results
 
